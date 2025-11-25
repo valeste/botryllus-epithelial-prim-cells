@@ -1,0 +1,84 @@
+---
+title: "02_mtt_time_series"
+output: html_document
+date: "2025-11-25"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, engine='bash', eval=FALSE}
+cd ..
+
+curl -L https://docs.google.com/spreadsheets/d/1RpM0881NJEzBm09j8-RGcuky383pem1bS1zyPrAEk8E/export?exportFormat=csv | tee data/raw_mtt.csv
+```
+Read in data
+```{r}
+library(tidyverse)
+
+mtt <- read_csv("../data/raw_mtt.csv")
+
+```
+
+
+```{r}
+mtt_norm <- mtt %>%
+  group_by(date, plate, timepoint_h) %>%
+  mutate(
+    blank_mean = mean(abs_570nm[contents == "blank"], na.rm = TRUE),
+    abs_corr   = abs_570nm - blank_mean
+  ) %>%
+  ungroup()
+
+```
+
+```{r}
+mtt_cells <- mtt_norm %>%
+  filter(contents == "cells") %>%
+  mutate(
+    timepoint_h = factor(timepoint_h, levels = c(2, 4, 24)),
+    plate = factor(plate)
+  )
+
+```
+
+```{r}
+setwd('..')
+png(filename = "output/mtt_time_post_seeding.png", width = 1000, height = 900)
+ggplot(mtt_cells,
+            aes(x = timepoint_h, y = abs_corr)) +
+  geom_boxplot(fill = NA, color = "black", outlier.shape = NA, linewidth = 1) +
+  geom_jitter(width = 0.1, size = 3, alpha = 0.9, color = "black") +
+  labs(
+    x = "Time post-seeding (h)",
+    y = "Absorbance (570 nm)"
+  ) +
+  theme_classic(base_size = 20) +   # overall font size bump
+  theme(
+    axis.title.x = element_text(size = 26, face = "bold"),
+    axis.title.y = element_text(size = 26, face = "bold"),
+    axis.text.x  = element_text(size = 20),
+    axis.text.y  = element_text(size = 20)
+)
+dev.off()
+```
+
+facet wrapped if you want to look at plate effects
+```{r}
+ggplot(mtt_cells,
+       aes(x = timepoint_h,
+           y = abs_corr,
+           fill = timepoint_h)) +
+  geom_boxplot(alpha = 0.7, outlier.shape = NA) +
+  geom_jitter(width = 0.1, size = 2, alpha = 0.9) +
+  facet_wrap(~ plate) +
+  labs(
+    x = "Time post-exposure (h)",
+    y = "MTT absorbance (570 nm), blank-corrected",
+    fill = "Time (h)"
+  ) +
+  theme_classic(base_size = 14)
+
+```
+
