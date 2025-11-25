@@ -1,0 +1,54 @@
+---
+title: "01-cell-counts"
+output: html_document
+date: "2025-11-25"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+
+```
+
+library(tidyverse)
+
+# Mock dataset
+```{r}
+cell_counts <- tribble(
+  ~replicate, ~tissue, ~cells,
+  1, "Zooid", 2800,
+  2, "Zooid", 2900,
+  3, "Zooid", 2700,
+  1, "Primary bud", 500,
+  2, "Primary bud", 800,
+  3, "Primary bud", 798
+)
+```
+
+
+```{r}
+setwd('..')
+png(filename = "output/cell_count_mock.png", width = 1200, height = 900)
+ggplot(cell_counts, aes(x = tissue, y = cells, fill = tissue)) +
+  stat_summary(fun = mean, geom = "bar", width = 0.65, color = "black") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2) +
+  geom_jitter(width = 0.1, size = 3.5, alpha = 0.8) +
+  scale_fill_manual(values = c("Zooid" = "#377eb8",
+                               "Primary bud" = "#e41a1c")) +
+  labs(
+    x = "",
+    y = "Cell count"
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(family = "sans"),
+    axis.title.x = element_text(size = 22),
+    axis.title.y = element_text(size = 22),
+    axis.text.x  = element_text(size = 20),
+    axis.text.y  = element_text(size = 20),
+    plot.title   = element_text(size = 26, face = "bold"),
+    legend.position = "none"
+  )
+
+dev.off()
+```
