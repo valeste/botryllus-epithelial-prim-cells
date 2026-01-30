@@ -41,32 +41,138 @@ mtt_cells <- mtt_norm %>%
     plate = factor(plate)
   )
 
+plate_means <- mtt_cells %>%
+  group_by(plate, timepoint_h) %>%
+  summarise(
+    sd_abs   = sd(abs_corr, na.rm = TRUE),
+    mean_abs = mean(abs_corr, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+ summary_mtt <- plate_means %>%
+  group_by(timepoint_h) %>%
+  summarise(
+    sd_abs   = sd(mean_abs, na.rm = TRUE),
+    mean_abs = mean(mean_abs, na.rm = TRUE),
+    n        = n(),  # number of plates
+    se_abs   = sd_abs / sqrt(n),
+    .groups = "drop"
+  )
+
 ```
+```{r}
+mtt_plot <- plate_means %>%
+  filter(mean_abs >= 0)
+```
+
+```{r}
+genet_colors <- c(
+  "mtt1" = "#1B9E77",
+  "mtt2" = "#D95F02",
+  "mtt3" = "#7570B3"
+)
+
+# sets color scale and relabels them to tunicate 1, 2, 3
+scale_color_manual(
+  values = genet_colors,
+  labels = c(
+    "mtt1" = "Tunicate 1",
+    "mtt2" = "Tunicate 2",
+    "mtt3" = "Tunicate 3"
+  ),
+  drop = FALSE
+)
+
+```
+
+
 
 ```{r}
 setwd('..')
 png(filename = "output/mtt_time_post_seeding.png", width = 1000, height = 900)
-ggplot(mtt_cells,
-            aes(x = timepoint_h, y = abs_corr)) +
-  geom_boxplot(fill = NA, color = "black", outlier.shape = NA, linewidth = 1) +
-  geom_jitter(width = 0.1, size = 3, alpha = 0.9, color = "black") +
+ggplot(plate_means,
+       aes(x = timepoint_h, y = mean_abs)) +
+  geom_boxplot(
+    fill = NA,
+    color = "black",
+    outlier.shape = NA,
+    linewidth = 1
+  ) +
+  geom_jitter(
+    aes(color = plate),
+    width = 0.1,
+    size = 3,
+    alpha = 0.9
+  ) +
+  scale_color_manual(
+    values = genet_colors,
+    labels = c(
+      "mtt1" = "Tunicate 1",
+      "mtt2" = "Tunicate 2",
+      "mtt3" = "Tunicate 3"
+    ),
+    drop = FALSE
+  ) +
   labs(
     x = "Time post-seeding (h)",
-    y = "Absorbance (570 nm)"
+    y = "Average genet-level absorbance (570 nm)",
+    color = "Genet"
   ) +
-  theme_classic(base_size = 20) +   # overall font size bump
+  theme_classic(base_size = 20) +
   theme(
     axis.title.x = element_text(size = 26, face = "bold"),
     axis.title.y = element_text(size = 26, face = "bold"),
     axis.text.x  = element_text(size = 20),
     axis.text.y  = element_text(size = 20)
-)
+  )
+
+dev.off()
+```
+```{r}
+setwd('..')
+png(filename = "output/mtt_time_post_seeding_none_below_zero.png", width = 1000, height = 900)
+ggplot(mtt_plot,
+       aes(x = timepoint_h, y = mean_abs)) +
+  geom_boxplot(
+    fill = NA,
+    color = "black",
+    outlier.shape = NA,
+    linewidth = 1
+  ) +
+  geom_jitter(
+    aes(color = plate),
+    width = 0.1,
+    size = 3,
+    alpha = 0.9
+  ) +
+  scale_color_manual(
+    values = genet_colors,
+    labels = c(
+      "mtt1" = "Tunicate 1",
+      "mtt2" = "Tunicate 2",
+      "mtt3" = "Tunicate 3"
+    ),
+    drop = FALSE
+  ) +
+  labs(
+    x = "Time post-seeding (h)",
+    y = "Average genet-level absorbance (570 nm)",
+    color = "Genet"
+  ) +
+  theme_classic(base_size = 20) +
+  theme(
+    axis.title.x = element_text(size = 26, face = "bold"),
+    axis.title.y = element_text(size = 26, face = "bold"),
+    axis.text.x  = element_text(size = 20),
+    axis.text.y  = element_text(size = 20)
+  )
 dev.off()
 ```
 
+
 facet wrapped if you want to look at plate effects
 ```{r}
-ggplot(mtt_cells,
+ggplot(mtt_cells_clean,
        aes(x = timepoint_h,
            y = abs_corr,
            fill = timepoint_h)) +
@@ -74,11 +180,18 @@ ggplot(mtt_cells,
   geom_jitter(width = 0.1, size = 2, alpha = 0.9) +
   facet_wrap(~ plate) +
   labs(
-    x = "Time post-exposure (h)",
+    x = "Time post-seeding (h)",
     y = "MTT absorbance (570 nm), blank-corrected",
     fill = "Time (h)"
   ) +
   theme_classic(base_size = 14)
 
 ```
+
+```{r}
+mtt_cells_clean <- mtt_cells |> 
+  dplyr::filter(!(plate == "mtt2" & timepoint_h == 24))
+
+```
+
 
