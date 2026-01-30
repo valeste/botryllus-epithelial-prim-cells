@@ -1,0 +1,340 @@
+---
+title: "03-2023-pilot-ni-pre-exposure-cells"
+subtitle: "Pre-exposure to nickel effects on Primary Epithelial Cells of *Botryllus schlosseri*"
+output: html_document
+date: "2023-12-24"
+---
+
+```{r, warning=FALSE}
+library(knitr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(hrbrthemes)
+library(ggplot2)
+library(car)
+library(RColorBrewer)
+library(ggpubr)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Objective and Background
+
+Data below was collected from a pilot study conducted in Autumn 2023 where field-collected individual *Botryllus schlosseri* were exposed to a low and high treatment of nickel chloride and then were dissected for primary buds. The objective was to evaluate if a pre-nickel exposure in *Botryllus* improved primary epithelial cell monolayer proliferation. Refer to [Pilot 1.1 Nickel Exposure](https://valeste.github.io/tough-tunicates/posts/nicl2-botryllus-pilot/) notebook post for experimental design details.
+
+# Retrieving Data from Google Sheets
+
+Note, if you do this, make sure your spreadsheet is publicly available to anyone with a link.
+
+```{r, engine='bash', eval= FALSE, echo=TRUE}
+cd ..
+curl -L https://docs.google.com/spreadsheets/d/13o7wsaFG9QAbBtIo31XtbfPtFOcf5HUEEYDksrcqaok/export?exportFormat=csv | tee data/ni_pre-exposure_cell.csv
+```
+
+Read in the data to your local R environment.
+
+```{r}
+cell <- read.csv(file = "../data/ni_pre-exposure_cell.csv")  
+```
+
+# Cleaning up Data
+
+During the study, we documented blastogenic stage with the 7 level blastogenic stage scale For simplicity in our graphs and our interpretation, we will be being the stages into a 4 level blastogenic stage scale
+
+```{r}
+# Create a new column 'simple_stage' based on conditions
+cell <- cell %>%
+  mutate(simple_stage = case_when(
+    stage_at_dissection %in% c("A1", "A2") ~ "A",
+    stage_at_dissection %in% c("B1", "B2") ~ "B",
+    stage_at_dissection %in% c("C1", "C2") ~ "C",
+    stage_at_dissection == "TO" ~ "TO",
+    TRUE ~ NA_character_  # This will handle any other cases or return NA if none match
+  ))
+```
+
+Cleaning up and subsetting data.
+
+```{r}
+cell$date <- mdy(cell$date) #convert the date column from characters to true date
+
+cell_pilot <- cell[cell$experiment == 0, ] # only want the pilot experiment, experiment 1 failed in poor dissecting technique
+
+# Subset the 'cell_pilot' data frame to include rows with hours post seeding (hps) values of 0, 18, 38, and 70 hps.
+
+cell_pilot <- cell_pilot[cell_pilot$hps %in% c(0, 18, 38, 70, 240, 600), ]
+
+# Set the treatment, animal ID, and date as factors.
+cell_fact <- cell_pilot %>%
+  mutate(treatment_mg_per_L = as.factor(treatment_mg_per_L)) %>%
+  mutate(animal_ID = as.factor(animal_ID)) %>%
+  mutate(date = as.factor(date))
+
+
+summary(cell_fact)
+```
+
+Calculate the percent of monolayer output per seeded tissue piece based on the first 12 rows of 'attached_tissue'. Here we are calculating the amount of monolayers that occurred relative to the amount of originally seeded tissue. Overtime, seeded tissue detaches and is removed from the plate so if you were to calculate this ratio per day it would be off. If using this, make sure the data frame is in order from A1-C4 wells otherwise it's miscalculated.
+
+```{r}
+percent_output <- ((cell_fact$no_mono_out) / head(cell_fact$no_attached_tissue, 12)) * 100
+
+# Add the newly calculated percent output values to the old data frame
+cell_fact <- cbind(cell_fact,percent_output)
+
+```
+
+# Summary Statistics
+
+Number of tissue pieces attached:
+
+
+Number of monolayer output:
+
+```{r}
+# Calculate the mean 
+mean_mono_out <- cell_fact %>%
+  group_by(hps, treatment_mg_per_L, simple_stage) %>%
+  summarise(no_mono = mean(no_mono_out, na.rm = TRUE),
+            num_points = n())
+
+
+# Calculate SD and filter out groups with fewer than 2 observations
+SD_mono_out <- cell_fact %>%
+  group_by(hps, treatment_mg_per_L, simple_stage) %>%  
+  summarise(SD_mono = sd(no_mono_out, na.rm = TRUE),
+            num_points = n())
+
+
+n <- 4
+
+SE_mono <- SD_mono_out$SD_mono/ sqrt(n)
+# Print the calculated mean health scores
+print(mean_mono_out)
+print(SE_mono)
+```
+
+Monolayer output by relative tissue seeded (percent):
+
+```{r}
+# Calculate the mean 
+mean_ratio_mono_out <- cell_fact %>%
+  group_by(hps, treatment_mg_per_L, simple_stage) %>%
+  summarise(percent_mean_mono = mean(percent_output, na.rm = TRUE),
+            num_points = n())
+
+
+# Calculate SD and filter out groups with fewer than 2 observations
+SD_ratio_mono_out <- cell_fact %>%
+  group_by(hps, treatment_mg_per_L, simple_stage) %>%  
+  summarise(SD_ratio_mono = sd(percent_output, na.rm = TRUE),
+            num_points = n())
+
+
+n <- 4
+
+SE_mono_ratio <- SD_ratio_mono_out$SD_ratio_mono/ sqrt(n)
+# Print the calculated mean health scores
+print(mean_ratio_mono_out)
+print(SE_mono_ratio)
+```
+
+# Graphs
+
+Below are graphs used in the SICB poster generated. Graph settings are set to be really large for printing and don't render well in this format so instead are figures with attached images of the produced graphs.
+
+```{r, eval=FALSE}
+setwd('..')
+png(filename = "output/line_percnet_output.png", width = 1100, height = 700) 
+##good for making a 7x5 in image for printing ~150 dpi
+
+ggplot(data = mean_ratio_mono_out, aes(x = hps, y = percent_mean_mono, 
+                                       color = simple_stage, linetype = treatment_mg_per_L)) +
+  theme_minimal() +
+  labs(x = "Hours Post-Seeding", y = "Percent Monolayer Outputs") +
+  geom_point() +
+  geom_line(size = 3) +  # Adjusted line thickness to 2
+  scale_color_manual(name = "Stage",
+                     values = c("#FFD92F", "#E78AC3",  "#8DA0CB", "#A6D854"),  # Specify the colors
+                     labels = c("A", "B", "C", "TO")) +  # Use fill instead of color in the legend
+  scale_linetype_manual(name = "Treatment",
+                        values = c("dotted", "dotdash", "solid"),  # Example linetypes
+                        labels = c("Control", "5 mg/L", "45 mg/L")) +
+  scale_x_continuous(breaks = seq(0, max(mean_ratio_mono_out$hps), by = 10), expand = c(0, 0)) +  # Adjust x-axis to start at 0
+  scale_y_continuous(expand = c(0, 0), breaks = c(0, 5, 10, 15, 20, 25), limits = c(0, 25)) +  # Adjust y-axis to start at 0
+  theme(legend.position = "right",
+        legend.margin = margin(1, 1, 1, 50),  # Adjusting the margin around the legend
+        axis.text = element_text(size = 30),
+        axis.title = element_text(size = 40),
+        legend.text = element_text(size = 30),
+        legend.title = element_text(size = 40),
+        plot.margin = margin(t = 2, r = 1, b = 1, l = 1, unit = "cm"),  # Adjust the top margin
+        legend.key.size = unit(4, "lines"),
+        panel.grid.major.x = element_line(color = "darkgrey", size = 0.5),  # Remove major vertical gridlines
+        panel.grid.minor.x = element_blank(),
+        panel.grid.major.y = element_line(color = "darkgrey", size = 0.5),
+        panel.grid.minor.y = element_blank())  # Adjust the size of legend keys for linetypes
+
+dev.off()
+```
+```{r}
+mean_tissue_attached_18hps <-mean_tissue_attached[mean_tissue_attached$hps == "18", ]
+```
+
+
+```{r}
+setwd('..')
+png(filename = "output/cell_attached_stacked_all_simple_stage.png", width = 1000, height = 900)
+
+ggplot(mean_tissue_attached_18hps, aes(x = treatment_mg_per_L, y = mean_attached, fill = simple_stage)) +
+   geom_bar(stat = "identity", width = 0.9) +
+   scale_fill_manual(name = "Stage",
+                     values = c("#FFD92F", "#E78AC3",  "#8DA0CB", "#A6D854"),  # Specify the colors
+                     labels = c("A", "B", "C", "TO")) +
+   labs(x = "Treatment (Nickel Chloride mg/L)",
+        y = "Number of Attached Tissue") +
+   theme_minimal() +
+   scale_y_continuous(breaks = c(0, 5, 10, 15, 20, 25, 30), limits = c(0, 30)) +
+   theme(panel.grid.major.x = element_blank(),
+         panel.grid.minor.x = element_blank(),
+         panel.grid.major.y = element_line(color = "darkgrey", size = 1),
+         panel.grid.minor.y = element_line(color = "darkgrey", size = 0.5), 
+         axis.text = element_text(size = 30),
+         axis.title = element_text(size = 40),
+         legend.text = element_text(size = 40),
+         legend.title = element_text(size = 40))
+dev.off()
+```
+# Refined singular figure
+
+
+```{r}
+cell_fact
+write.csv(cell_fact, "../output/cell_fact.csv", row.names = FALSE)
+
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# --- Choose the timepoints you want to plot --- 
+# I chose 18 hps because that is when you first start seeing monolayers
+attach_hps <- 18
+
+# choose the timepoint you want to summarize at
+hps_use <- 18  
+
+# define the number of genets represented in each stage x treatment combo
+genet_n <- cell_fact %>%
+  filter(hps == hps_use) %>%
+  group_by(treatment_mg_per_L, simple_stage) %>%
+  summarise(
+    n_genets = n_distinct(animal_ID),
+    .groups = "drop"
+  )
+# create object for defining genet number in stacked bar plot
+n_labels <- option1_long %>%
+  left_join(genet_n,
+            by = c("treatment_mg_per_L", "simple_stage")) %>%
+  filter(outcome == "Monolayer formed") %>%
+  mutate(label = paste0("n = ", n_genets))
+```
+
+```{r}
+# This will clean up our data cell_fact clearly to use it for plotting stacked bar graphs of the outcomes for seeded tissue pieces.
+option1_wide <- cell_fact %>%
+  filter(hps == hps_use) %>%
+  mutate(
+    seeded_n  = tissue_total,
+    attached_n = no_attached_tissue,
+    mono_n    = no_mono_out,
+
+    not_attached_n = pmax(seeded_n - attached_n, 0),
+    attached_no_mono_n = pmax(attached_n - mono_n, 0),
+    monolayer_n = pmax(mono_n, 0)
+  ) %>%
+  group_by(treatment_mg_per_L, simple_stage) %>%
+  summarise(
+    not_attached = mean(not_attached_n, na.rm = TRUE),
+    attached_no_mono = mean(attached_no_mono_n, na.rm = TRUE),
+    monolayer = mean(monolayer_n, na.rm = TRUE),
+    n_wells = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    not_attached = round(not_attached),
+    attached_no_mono = round(attached_no_mono),
+    monolayer = round(monolayer)
+  )
+
+option1_long <- option1_wide %>%
+  tidyr::pivot_longer(
+    cols = c(not_attached, attached_no_mono, monolayer),
+    names_to = "outcome",
+    values_to = "count"
+  ) %>%
+  mutate(
+    outcome = factor(
+      outcome,
+      levels = c("not_attached", "attached_no_mono", "monolayer"),
+      labels = c("Not attached", "Attached, no monolayer", "Monolayer formed")
+    )
+  )
+
+
+```
+
+```{r}
+png(filename = "../output/option1_counts_stage_stacked_facet_treatment_honeydew.png",
+    width = 1300, height = 850)
+
+ggplot(option1_long, aes(x = simple_stage, y = count, fill = outcome)) +
+  geom_col(width = 0.85, color = "white") +
+  facet_wrap(
+  ~ treatment_mg_per_L,
+  nrow = 1,
+  labeller = labeller(
+    treatment_mg_per_L = function(x) paste0(x, " mg/L NiCl2")
+  )
+) +
+  scale_fill_manual(
+    values = c(
+      "Not attached" = "honeydew2",
+      "Attached, no monolayer" = "honeydew3",
+      "Monolayer formed" = "honeydew4"
+    ),
+    name = NULL
+  ) +
+  labs(
+    x = "Stage",
+    y = "Number of tissue pieces"
+  ) +
+  geom_text(
+    data = n_labels,
+    aes(x = simple_stage, y = count, label = label),
+    vjust = -0.4,
+    size = 7,
+    inherit.aes = FALSE
+  ) +
+   scale_y_continuous(
+    breaks = 1:10,
+    limits = c(0, 10),
+    expand = c(0, 0.7)
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text = element_text(size = 24),
+    axis.title = element_text(size = 32),
+    strip.text = element_text(size = 28, face = "bold"),
+    legend.text = element_text(size = 24),
+    legend.position = "right"
+  )
+
+dev.off()
+```
