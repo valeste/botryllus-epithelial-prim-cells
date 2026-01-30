@@ -38,8 +38,27 @@ genet_means <- cell_counts %>%
     .groups = "drop"
   )
 
+# if you want summary stats at well level. Depends on what we are calling a technical replicate. I think that tisuse is a tech rep. we have a total of 15 tissue pieces that are either of zooid or bud from the same genet disperesed across three wells (5 tissue piece groups for a total of 10 tissue pieces per well)
+genet_means2 <- cell_counts %>%
+  group_by(genet, tissue, well) %>%
+  summarise(
+    mean_cell_count = mean(cell_count, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  group_by(genet, tissue) %>%
+  summarise(
+    mean_cell_count1 = mean(mean_cell_count),
+    sd_cell_count   = sd(mean_cell_count),
+    n               = n(),  # number of wells
+    .groups = "drop"
+  )
+
+
 genet_means
+genet_means2
 ```
+
+
 
 ```{r}
 summary_tissue <- genet_means %>%
@@ -83,7 +102,7 @@ ggplot(genet_means,
     fun = mean,
     geom = "bar",
     width = 0.65,
-    color = "black"
+    color = "white"
   ) +
   stat_summary(
     fun.data = mean_sdl,
@@ -94,12 +113,19 @@ ggplot(genet_means,
   geom_jitter(
     aes(color = genet),
     width = 0.1,
-    size = 3.5,
+    size = 5,
     alpha = 0.8
   ) +
+  annotate(
+    "text",
+    x = 1.5,  # midpoint between bud and zooid
+    y = max(genet_means$mean_cell_count) * 1.08,
+    label = "ns",
+    size = 10
+  ) +
   scale_fill_manual(
-    values = c("zooid" = "grey",
-               "bud"   = "white")
+    values = c("zooid" = "mistyrose4",
+               "bud"   = "mistyrose3")
   ) +
    scale_color_manual(
     values = genet_colors,
@@ -112,11 +138,11 @@ ggplot(genet_means,
   ) +
   labs(
     x = "Seeded tissue type",
-    y = "Genet-level mean cell count",
+    y = "Mean cell count",
     color = "Genet"
   ) +
   guides(
-    fill = "none"   # ⬅️ removes tissue legend
+    fill = "none"   # removes tissue legend
   ) +
   theme_classic() +
   theme(
@@ -138,16 +164,20 @@ dev.off()
 
 # stats
 ```{r}
-# wide format for paired test
-cell_wide <- cell_summary |>
-  select(genet, tissue, mean_cell_count) |>
-  tidyr::pivot_wider(
-    names_from = tissue,
+library(tidyr)
+
+genet_wide <- genet_means %>%
+  select(genet, tissue, mean_cell_count) %>%
+  pivot_wider(
+    names_from  = tissue,
     values_from = mean_cell_count
   )
 
-# paired t-test
-t.test(cell_wide$bud, cell_wide$zooid, paired = TRUE)
+#parametric assement
+t.test(genet_wide$bud, genet_wide$zooid, paired = TRUE)
+
+#non-parametric assessment
+wilcox.test(genet_wide$bud, genet_wide$zooid, paired = TRUE)
 
 ```
 
