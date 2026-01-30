@@ -338,3 +338,8 @@ ggplot(option1_long, aes(x = simple_stage, y = count, fill = outcome)) +
 
 dev.off()
 ```
+```{r}
+
+print(sessionInfo())
+```
+
