@@ -1,0 +1,191 @@
+---
+title: "03-ni-in-vitro-range"
+output: html_document
+date: "2026-02-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+```
+
+```{r, engine='bash', eval=FALSE}
+cd ..
+
+curl -L https://docs.google.com/spreadsheets/d/1BZ2mwevz3EYArGQt_kupqAx_xGHuARmVpib2BslYFv0/export?exportFormat=csv | tee data/ni_invitro.csv
+```
+
+```{r}
+df <- read.csv("../data/ni_invitro.csv")
+
+#ensures all numeric columns are actually numeric
+df <- df %>%
+  mutate(
+    genet = factor(genet),   # force discrete
+    count = as.numeric(count),
+    percent_area = as.numeric(percent_area),
+    hpe = as.numeric(hpe)
+  )
+
+```
+
+```{r}
+# create a new data frame to pair genets x treatments between the two days
+
+paired <- df %>%
+  select(genet, plate, well, treatment_ni_mg_per_L,
+         pair_number, hpe, count, percent_area) %>%
+  pivot_wider(
+    names_from = hpe,
+    values_from = c(count, percent_area),
+    names_prefix = "hpe_"
+  )
+
+```
+
+```{r}
+#compute log2fold change between days. Decided to do a log2fold change for cell count to account for the noisiness of the cell count data through particle analysis using Fiji
+paired <- paired %>%
+  mutate(
+    log2FC_count =
+      log2((count_hpe_24 + 1) / (count_hpe_0 + 1)),
+
+    log2FC_percent_area =
+      log2((percent_area_hpe_24 + 1) / (percent_area_hpe_0 + 1))
+  )
+
+```
+
+```{r}
+# summarizing per treatment and genet
+treatment_summary <- paired %>%
+  group_by(genet, treatment_ni_mg_per_L) %>%
+  summarise(
+    n_pairs = n(),
+    mean_log2FC_count = mean(log2FC_count, na.rm = TRUE),
+    sd_log2FC_count = sd(log2FC_count, na.rm = TRUE),
+
+    mean_log2FC_area = mean(log2FC_percent_area, na.rm = TRUE),
+    sd_log2FC_area = sd(log2FC_percent_area, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+```
+
+Exploratory Plots
+
+
+
+```{r}
+#Shows the technical replicate data with noise per treatment before summarizing into a mean
+ggplot(paired,
+       aes(x = factor(treatment_ni_mg_per_L),
+           y = log2FC_count,
+           color = genet)) +
+
+  geom_jitter(width = 0.15, alpha = 0.6, size = 2) +
+
+  geom_hline(yintercept = 0, linetype = "dashed") +
+
+  labs(
+    x = "Nickel (mg/L)",
+    y = "log2 Fold Change (Cell Count)",
+    color = "Genet",
+    title = "Paired explant-level log2FC by genet"
+  ) +
+
+  theme_classic()
+
+
+```
+
+```{r}
+
+# this plot is comparing % area to count (log fold change). technically should be a positive correlation, however given the pixel size of the images needed to change in order to make sure no extra "noise" was detected for images that didn't perfectly align and because some images were assessed that were at 400x mag instead of 200x mag, there will be some variation in this graph 
+ggplot(paired,
+       aes(x = log2FC_count,
+           y = log2FC_percent_area,
+           color = factor(treatment_ni_mg_per_L))) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(
+    x = "log2FC Cell Count",
+    y = "log2FC % Area",
+    color = "Ni (mg/L)"
+  ) +
+  theme_classic()
+
+```
+
+Explanatory figures
+
+```{r}
+ggplot(treatment_summary,
+       aes(x = factor(treatment_ni_mg_per_L),
+           y = mean_log2FC_count,
+          color = genet)) +
+
+  geom_errorbar(
+    aes(
+      ymin = mean_log2FC_count - sd_log2FC_count,
+      ymax = mean_log2FC_count + sd_log2FC_count
+    ),
+    width = 0.2
+  ) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+
+  scale_y_continuous(
+    limits = c(-1, 1),   # symmetric
+    breaks = seq(-1, 1, by = 0.2)
+  ) +
+
+  labs(
+    x = "Nickel (mg/L)",
+    y = "Mean log2 Fold Change (Cell Count)"
+  ) +
+  theme_classic()
+
+
+```
+```{r}
+ggplot(treatment_summary,
+       aes(x = factor(treatment_ni_mg_per_L),
+           y = mean_log2FC_area)) +
+
+  # error bars: mean ± SD
+  geom_errorbar(
+    aes(
+      ymin = mean_log2FC_area - sd_log2FC_area,
+      ymax = mean_log2FC_area + sd_log2FC_area
+    ),
+    width = 0.2
+  ) +
+
+  # mean point
+  geom_point(size = 3) +
+  scale_y_continuous(
+    limits = c(-1, 1),   # symmetric
+    breaks = seq(-1, 1, by = 0.5)
+  ) +
+  # reference line
+  geom_hline(yintercept = 0, linetype = "dashed") +
+
+  labs(
+    x = "Nickel (mg/L)",
+    y = "Mean log2 Fold Change (Percent Area)",
+    title = "Genet 1: Mean paired log2FC ± SD"
+  ) +
+
+  theme_classic()
+
+```
+
+
+
+
+
+
+
