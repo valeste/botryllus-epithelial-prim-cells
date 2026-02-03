@@ -122,38 +122,63 @@ ggplot(paired,
 Explanatory figures
 
 ```{r}
+setwd('..')
+png(filename = "output/cell_count_change_0to24_ni_invitro.png", width = 1200, height = 900)
+
 ggplot(treatment_summary,
        aes(x = factor(treatment_ni_mg_per_L),
            y = mean_log2FC_count,
-          color = genet)) +
+           color = genet)) +
 
+  # mean ± SD (thicker bars)
   geom_errorbar(
     aes(
       ymin = mean_log2FC_count - sd_log2FC_count,
       ymax = mean_log2FC_count + sd_log2FC_count
     ),
-    width = 0.2
+    width = 0.25,
+    linewidth = 0.9
   ) +
-  geom_point(size = 3) +
-  geom_hline(yintercept = 0, linetype = "dashed") +
+
+  # jittered mean points
+  geom_jitter(
+    width = 0.05,
+    height = 0,
+    size = 4,
+    alpha = 0.9
+  ) +
+
+  # reference line
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.7) +
 
   scale_y_continuous(
-    limits = c(-1, 1),   # symmetric
+    limits = c(-1, 1),
     breaks = seq(-1, 1, by = 0.2)
   ) +
 
   labs(
-    x = "Nickel (mg/L)",
-    y = "Mean log2 Fold Change (Cell Count)"
+    x = "Nickel (II) Chloride Exposure Concentration (mg/L)",
+    y = "Log2 Fold Change (Cell Count)",
+    color = "Genet"
   ) +
-  theme_classic()
 
+  theme_classic(base_size = 16) +
+  theme(
+    axis.title.x = element_text(size = 30, margin = margin(t = 20)),
+    axis.title.y = element_text(size = 30, margin = margin(l=12)),
+    axis.text  = element_text(size = 25),
+    legend.title = element_text(size = 20),
+    legend.text  = element_text(size = 20)
+  )
 
+dev.off()
 ```
+Plot to view percent area though no percent area was evaluated for cells that were manually counted. All data not reperesented here.
 ```{r}
 ggplot(treatment_summary,
        aes(x = factor(treatment_ni_mg_per_L),
-           y = mean_log2FC_area)) +
+           y = mean_log2FC_area,
+           color =genet)) +
 
   # error bars: mean ± SD
   geom_errorbar(
@@ -175,7 +200,7 @@ ggplot(treatment_summary,
 
   labs(
     x = "Nickel (mg/L)",
-    y = "Mean log2 Fold Change (Percent Area)",
+    y = "Log2 Fold Change (Percent Area)",
     title = "Genet 1: Mean paired log2FC ± SD"
   ) +
 
