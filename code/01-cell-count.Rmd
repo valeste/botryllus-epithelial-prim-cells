@@ -136,6 +136,11 @@ ggplot(genet_means,
     ),
     drop = FALSE
   ) +
+  scale_y_continuous(
+    breaks = c(0,100,200,300, 400),
+    limits = c(0, 400),
+    expand = c(0, 10)
+  ) +
   labs(
     x = "Seeded tissue type",
     y = "Mean cell count",
@@ -151,8 +156,6 @@ ggplot(genet_means,
     axis.title.y = element_text(size = 33),
     axis.text.x  = element_text(size = 30),
     axis.text.y  = element_text(size = 30),
-
-    # ⬇️ legend sizing
     legend.title = element_text(size = 28),
     legend.text  = element_text(size = 24),
     legend.key.size = unit(1.5, "cm")
@@ -160,6 +163,78 @@ ggplot(genet_means,
 
 dev.off()
 ```
+
+```{r}
+setwd('..')
+png(filename = "output/cell_count_allpoints.png", width = 1200, height = 900)
+ggplot(cell_counts,
+       aes(x = tissue, y = cell_count, fill = tissue)) +
+  stat_summary(
+    fun = mean,
+    geom = "bar",
+    width = 0.65,
+    color = "white"
+  ) +
+  stat_summary(
+    fun.data = mean_sdl,
+    fun.args = list(mult = 1),   # ±1 SD across genets
+    geom = "errorbar",
+    width = 0.2
+  ) +
+  geom_jitter(
+    aes(color = genet),
+    width = 0.1,
+    size = 5,
+    alpha = 0.8
+  ) +
+  annotate(
+    "text",
+    x = 1.5,  # midpoint between bud and zooid
+    y = 600,
+    label = "ns",
+    size = 10
+  ) +
+  scale_fill_manual(
+    values = c("zooid" = "mistyrose4",
+               "bud"   = "mistyrose3")
+  ) +
+   scale_color_manual(
+    values = genet_colors,
+    labels = c(
+      "mtt1" = "Tunicate 1",
+      "mtt2" = "Tunicate 2",
+      "mtt3" = "Tunicate 3"
+    ),
+    drop = FALSE
+  ) +
+  scale_y_continuous(
+    breaks = c(0,100,200,300, 400,500,600,700),
+    limits = c(0, 800),
+    expand = c(0, 10)
+  ) +
+  labs(
+    x = "Seeded tissue type",
+    y = "Cell count",
+    color = "Genet"
+  ) +
+  guides(
+    fill = "none"   # removes tissue legend
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(family = "sans"),
+    axis.title.x = element_text(size = 33),
+    axis.title.y = element_text(size = 33),
+    axis.text.x  = element_text(size = 30),
+    axis.text.y  = element_text(size = 30),
+    legend.title = element_text(size = 28),
+    legend.text  = element_text(size = 24),
+    legend.key.size = unit(1.5, "cm")
+  )
+
+dev.off()
+```
+
 
 
 # stats
