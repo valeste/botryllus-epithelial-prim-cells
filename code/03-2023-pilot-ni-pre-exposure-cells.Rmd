@@ -177,9 +177,8 @@ ggplot(data = mean_ratio_mono_out, aes(x = hps, y = percent_mean_mono,
 
 dev.off()
 ```
-```{r}
-mean_tissue_attached_18hps <-mean_tissue_attached[mean_tissue_attached$hps == "18", ]
-```
+
+
 
 
 ```{r}
@@ -234,12 +233,8 @@ genet_n <- cell_fact %>%
     n_genets = n_distinct(animal_ID),
     .groups = "drop"
   )
-# create object for defining genet number in stacked bar plot
-n_labels <- option1_long %>%
-  left_join(genet_n,
-            by = c("treatment_mg_per_L", "simple_stage")) %>%
-  filter(outcome == "Monolayer formed") %>%
-  mutate(label = paste0("n = ", n_genets))
+
+
 ```
 
 ```{r}
@@ -264,11 +259,14 @@ option1_wide <- cell_fact %>%
     .groups = "drop"
   ) %>%
   mutate(
-    not_attached = round(not_attached),
-    attached_no_mono = round(attached_no_mono),
-    monolayer = round(monolayer)
+    not_attached = ceiling(not_attached),
+    attached_no_mono = ceiling(attached_no_mono),
+    monolayer = ceiling(monolayer)
   )
 
+```
+
+```{r}
 option1_long <- option1_wide %>%
   tidyr::pivot_longer(
     cols = c(not_attached, attached_no_mono, monolayer),
@@ -282,64 +280,172 @@ option1_long <- option1_wide %>%
       labels = c("Not attached", "Attached, no monolayer", "Monolayer formed")
     )
   )
+# create object for defining genet number in stacked bar plot
+n_labels <- option1_long %>%
+  left_join(genet_n,
+            by = c("treatment_mg_per_L", "simple_stage")) %>%
+  filter(outcome == "Monolayer formed") %>% # this is just to make sure we have only one label per stage x treatment superimposed on graph
+  mutate(label = paste0("n = ", n_genets))
 
 
 ```
 
 ```{r}
-png(filename = "../output/option1_counts_stage_stacked_facet_treatment_honeydew.png",
-    width = 1300, height = 850)
+png(filename = "../output/option1_counts_stage_stacked_facet_treatment.png", width = 1300, height = 850)
 
 ggplot(option1_long, aes(x = simple_stage, y = count, fill = outcome)) +
-  geom_col(width = 0.85, color = "white") +
-  facet_wrap(
-  ~ treatment_mg_per_L,
-  nrow = 1,
+  geom_col(width = 0.85) +
+  facet_wrap(~ treatment_mg_per_L,nrow = 1,
   labeller = labeller(
-    treatment_mg_per_L = function(x) paste0(x, " mg/L NiCl2")
+    treatment_mg_per_L = function(x) paste0(x)
   )
 ) +
   scale_fill_manual(
     values = c(
-      "Not attached" = "honeydew2",
-      "Attached, no monolayer" = "honeydew3",
-      "Monolayer formed" = "honeydew4"
-    ),
-    name = NULL
+      "Not attached" = "snow2",
+      "Attached, no monolayer" = "snow3",
+      "Monolayer formed" = "snow4"),
+    name = "Total Tissue Outcomes and Cell Monolayer Output",
+    labels = c(
+      "Not attached" = "Tissue not attached", 
+      "Attached, no monolayer" = "Tissue attached, no monolayer",
+      "Monolayer formed" = "Tissue attached, monolayer formed")
   ) +
   labs(
     x = "Stage",
-    y = "Number of tissue pieces"
+    y = "Number of zooid and bud tissue pieces"
   ) +
   geom_text(
     data = n_labels,
-    aes(x = simple_stage, y = count, label = label),
-    vjust = -0.4,
+    aes(x = simple_stage, y = 0, label = label),
+    vjust = 1.5,
     size = 7,
-    inherit.aes = FALSE
+    inherit.aes = TRUE
   ) +
    scale_y_continuous(
-    breaks = 1:10,
+    breaks = 0:10,
     limits = c(0, 10),
     expand = c(0, 0.7)
   ) +
   theme_minimal() +
   theme(
+    panel.background = element_rect( color = "black"),
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_line(color = "grey",linetype = "dashed"),
+    panel.grid.minor.y = element_blank(),
     axis.text = element_text(size = 24),
     axis.title = element_text(size = 32),
     strip.text = element_text(size = 28, face = "bold"),
+    strip.background = element_rect(fill = "grey"),
+    legend.title = element_text(size = 24, face = "bold"),
     legend.text = element_text(size = 24),
-    legend.position = "right"
+    legend.position = "bottom",
+    legend.title.position = "top"
   )
 
 dev.off()
 ```
-```{r}
 
-print(sessionInfo())
+```{r}
+option2_wide <- cell_fact %>%
+  filter(hps == hps_use) %>%
+  mutate(
+    float_zooid  = float_zooid,
+    float_bud = float_prim,
+    
+    attached_zooid = pmax(zooid_no - float_zooid, 0),
+    attached_bud  = pmax(prim_bud_no - float_prim, 0)
+  ) %>%
+  group_by(treatment_mg_per_L, simple_stage) %>%
+  summarise(
+    not_attached_z = mean(float_zooid, na.rm = TRUE),
+    attached_z = mean(attached_zooid, na.rm = TRUE),
+    not_attached_p = mean(float_bud, na.rm = TRUE),
+    attached_p = mean(attached_bud, na.rm = TRUE),
+    n_wells = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    not_attached_z = ceiling(not_attached_z),
+    attached_z = ceiling(attached_z),
+    not_attached_p = ceiling(not_attached_p),
+    attached_p = ceiling(attached_p)
+  )
+
 ```
+
+```{r}
+option2_long <- option2_wide %>%
+  tidyr::pivot_longer(
+    cols = c(not_attached_z, attached_z, not_attached_p, attached_p),
+    names_to = "outcome",
+    values_to = "count"
+  ) %>%
+  mutate(
+    outcome = factor(
+      outcome,
+      levels = c("not_attached_z", "not_attached_p", 
+                 "attached_z", "attached_p"),
+      labels = c("Unattached Zooids", "Unattached Primary Buds",
+                 "Attached Zooids", "Attached Primary Buds")
+    )
+  )
+```
+
+```{r}
+png(filename = "../output/option2_counts_stage_stacked_facet_treatment.png", width = 1300, height = 850)
+
+ggplot(option2_long, aes(x = simple_stage, y = count, fill = outcome)) +
+  geom_col(width = 0.85) +
+  facet_wrap(~ treatment_mg_per_L,nrow = 1,
+  labeller = labeller(
+    treatment_mg_per_L = function(x) paste0(x)
+  )
+) +
+  scale_fill_manual(
+    values = c(
+      "Unattached Zooids" = "lightsteelblue1",
+      "Unattached Primary Buds" = "lightsteelblue2",
+      "Attached Zooids" = "lightsteelblue3",
+      "Attached Primary Buds"= "lightsteelblue4"),
+    name = "Tissue Type Attachment Outcomes"
+  ) +
+  labs(
+    x = "Stage",
+    y = "Number of zooid or bud tissue pieces"
+  ) +
+  geom_text(
+    data = n_labels,
+    aes(x = simple_stage, y = 0, label = label),
+    vjust = 1.5,
+    size = 7,
+    inherit.aes = TRUE
+  ) +
+   scale_y_continuous(
+    breaks = 0:10,
+    limits = c(0, 10),
+    expand = c(0, 0.7)
+  ) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect( color = "black"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(color = "grey",linetype = "dashed"),
+    panel.grid.minor.y = element_blank(),
+    axis.text = element_text(size = 24),
+    axis.title = element_text(size = 32),
+    strip.text = element_text(size = 28, face = "bold"),
+    strip.background = element_rect(fill = "grey"),
+    legend.title = element_text(size = 24, face = "bold"),
+    legend.text = element_text(size = 24),
+    legend.position = "bottom",
+    legend.title.position = "top"
+  )
+
+dev.off()
+```
+
+
 
