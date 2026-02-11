@@ -122,8 +122,8 @@ ggplot(paired,
 Explanatory figures
 
 ```{r}
-setwd('..')
-png(filename = "output/cell_count_change_0to24_ni_invitro.png", width = 1200, height = 900)
+#setwd('..')
+#png(filename = "output/cell_count_change_0to24_ni_invitro.png", width = 1200, height = 900)
 
 ggplot(treatment_summary,
        aes(x = factor(treatment_ni_mg_per_L),
@@ -171,7 +171,7 @@ ggplot(treatment_summary,
     legend.text  = element_text(size = 20)
   )
 
-dev.off()
+#dev.off()
 ```
 Plot to view percent area though no percent area was evaluated for cells that were manually counted. All data not reperesented here.
 ```{r}
