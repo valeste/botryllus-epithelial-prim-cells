@@ -31,10 +31,17 @@ cd ..
 curl -L https://docs.google.com/spreadsheets/d/13o7wsaFG9QAbBtIo31XtbfPtFOcf5HUEEYDksrcqaok/export?exportFormat=csv | tee data/ni_pre-exposure_cell.csv
 ```
 
+```{r, engine='bash', eval= FALSE, echo=TRUE}
+cd ..
+curl -L https://docs.google.com/spreadsheets/d/1jscIxXDsEARLXBi_zoA6q5WON_mEWq42oqZWRZD7GHg/export?exportFormat=csv | tee data/ni_pre-exposure_cell_18hps_cellcounts.csv
+```
+
+
 Read in the data to your local R environment.
 
 ```{r}
 cell <- read.csv(file = "../data/ni_pre-exposure_cell.csv")  
+cell18 <- read.csv(file ="../data/ni_pre-exposure_cell_18hps_cellcounts.csv")
 ```
 
 # Cleaning up Data
@@ -51,10 +58,21 @@ cell <- cell %>%
     stage_at_dissection == "TO" ~ "TO",
     TRUE ~ NA_character_  # This will handle any other cases or return NA if none match
   ))
+
+cell18 <- cell18 %>%
+  mutate(simple_stage = case_when(
+    stage_at_dissection %in% c("A1", "A2") ~ "A",
+    stage_at_dissection %in% c("B1", "B2") ~ "B",
+    stage_at_dissection %in% c("C1", "C2") ~ "C",
+    stage_at_dissection == "TO" ~ "TO",
+    TRUE ~ NA_character_  # This will handle any other cases or return NA if none match
+  ))
+
 ```
 
 Cleaning up and subsetting data.
 
+## for just the instances of monolayerss
 ```{r}
 cell$date <- mdy(cell$date) #convert the date column from characters to true date
 
@@ -74,6 +92,24 @@ cell_fact <- cell_pilot %>%
 summary(cell_fact)
 ```
 
+
+## for with cell counts at 18hps
+```{r}
+cell18$date <- mdy(cell18$date) #convert the date column from characters to true date
+
+
+
+# Set the treatment, animal ID, and date as factors.
+cell_fact18 <- cell18 %>%
+  mutate(treatment_mg_per_L = as.factor(treatment_mg_per_L)) %>%
+  mutate(animal_ID = as.factor(animal_ID)) %>%
+  mutate(date = as.factor(date))
+
+
+summary(cell_fact18)
+```
+
+# calculate percent output monolayer instances
 Calculate the percent of monolayer output per seeded tissue piece based on the first 12 rows of 'attached_tissue'. Here we are calculating the amount of monolayers that occurred relative to the amount of originally seeded tissue. Overtime, seeded tissue detaches and is removed from the plate so if you were to calculate this ratio per day it would be off. If using this, make sure the data frame is in order from A1-C4 wells otherwise it's miscalculated.
 
 ```{r}
@@ -84,12 +120,12 @@ cell_fact <- cbind(cell_fact,percent_output)
 
 ```
 
-# Summary Statistics
+# Summary Statistics for just cell data frame. calculating monolayer output by percent instance
 
 Number of tissue pieces attached:
 
 
-Number of monolayer output:
+## Number of monolayer output:
 
 ```{r}
 # Calculate the mean 
@@ -114,7 +150,7 @@ print(mean_mono_out)
 print(SE_mono)
 ```
 
-Monolayer output by relative tissue seeded (percent):
+## Monolayer output by relative tissue seeded (percent):
 
 ```{r}
 # Calculate the mean 
@@ -139,7 +175,8 @@ print(mean_ratio_mono_out)
 print(SE_mono_ratio)
 ```
 
-# Graphs
+
+# Graphs for monolayer output (first iteration for SICB 2023)
 
 Below are graphs used in the SICB poster generated. Graph settings are set to be really large for printing and don't render well in this format so instead are figures with attached images of the produced graphs.
 
@@ -204,15 +241,18 @@ ggplot(mean_tissue_attached_18hps, aes(x = treatment_mg_per_L, y = mean_attached
          legend.title = element_text(size = 40))
 dev.off()
 ```
-# Refined singular figure
 
 
+# Refined singular figure for monolayer instnaces thesis paper
+
+first write out a csv of the newly formatted data frame that includes simple stage
 ```{r}
 cell_fact
 write.csv(cell_fact, "../output/cell_fact.csv", row.names = FALSE)
-
 ```
 
+
+here we also look at 18 hps because that is the time point at which we see cells
 ```{r}
 library(dplyr)
 library(tidyr)
@@ -398,11 +438,11 @@ png(filename = "../output/option2_counts_stage_stacked_facet_treatment.png", wid
 
 ggplot(option2_long, aes(x = simple_stage, y = count, fill = outcome)) +
   geom_col(width = 0.85) +
-  facet_wrap(~ treatment_mg_per_L,nrow = 1,
-  labeller = labeller(
-    treatment_mg_per_L = function(x) paste0(x)
+  facet_wrap(~ treatment_mg_per_L,nrow = 1
+  #labeller = labeller(
+    #treatment_mg_per_L = function(x) paste0(x, " mg/L NiCl2") this would give you labeling with # pasted mg/L after
   )
-) +
+ +
   scale_fill_manual(
     values = c(
       "Unattached Zooids" = "lightsteelblue1",
@@ -447,5 +487,220 @@ ggplot(option2_long, aes(x = simple_stage, y = count, fill = outcome)) +
 dev.off()
 ```
 
+
+
+
+
+# Refined singular figure(s) for cell count 
+
+```{r}
+mono_by_tissue <- cell_fact18 %>%
+  mutate(
+    treatment_mg_per_L = as.factor(treatment_mg_per_L),
+    simple_stage = factor(simple_stage, levels = c("A","B","C","TO")),
+    under_tissue = ifelse(is.na(under_tissue.), "NA", under_tissue.)
+  ) %>%
+    filter(no_mono_out == 1) %>%   # only wells where monolayer formed
+
+  group_by(tissueWithCells_ID, well_Placements, animal_ID,
+           treatment_mg_per_L, simple_stage) %>%
+  summarise(
+    cell_count_monolayer = sum(cell_count, na.rm = TRUE),  # ADD counts across images
+    n_images = sum(!is.na(cell_count)),
+    
+    under_tissue = dplyr::coalesce(first(under_tissue[!is.na(under_tissue)]), "NA")
+,
+    
+    .groups = "drop"
+  )
+
+```
+
+
+```{r}
+
+# 1) Collapse to "one row = one monolayer (one well)"
+mono_well <- mono_by_tissue %>%
+  group_by(well_Placements, animal_ID, treatment_mg_per_L, simple_stage) %>%
+  summarise(
+    cell_count_per_monolayer = sum(cell_count_monolayer),
+    under_tissue = first(under_tissue),
+    .groups = "drop"
+  )
+
+
+# 2) n labels per facet x stage (number of wells/monolayers)
+n_lab_mono <- mono_well %>%
+  count(treatment_mg_per_L, simple_stage, name = "n_wells")
+
+
+```
+
+
+
+```{r}
+png(filename = "../output/cell_count_18hps_preni_mono_well.png", width = 1000, height = 800)
+ggplot(mono_well,
+       aes(x = simple_stage,
+           y = cell_count_per_monolayer,
+           fill = under_tissue)) +
+
+  geom_col(width = 0.85, color = "white") + 
+
+  facet_wrap(~ treatment_mg_per_L, nrow = 1) +
+
+  scale_fill_manual(
+    values = c(
+      "yes" = "lightsteelblue3",
+      "no"  = "lightsteelblue4",
+      "NA"  = "grey50"
+    ),
+    labels = c(
+      "yes" = "Emerging from\nunderneath tissue explant",
+      "no"  = "Whole monolayer",
+      "NA"  = "No monolayer"
+    ),
+    name = "Monolayer Cell Count Area"
+  ) +
+
+  labs(
+    x = "Blastogenic Stage",
+    y = "Cell count per monolayer instance observed"
+  ) +
+
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.05))) +
+
+  geom_text(
+    data = n_lab_mono,
+    aes(x = simple_stage, y = -6, label = paste0("n = ", n_wells)),
+    inherit.aes = FALSE,
+    vjust = 2,
+    size = 6
+  ) +
+
+  coord_cartesian(clip = "off") +
+
+  theme_classic(base_size = 18) +
+  theme(
+    strip.text = element_text(size = 22, face = "bold"),
+    axis.title = element_text(size = 22),
+    axis.text = element_text(size = 16),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.position = "right",
+    panel.background = element_rect(fill = "white", color = "black"),
+    legend.key = element_rect(fill = "white", color = NA)
+  )
+
+dev.off()
+```
+
+
+
+
+```{r}
+well_counts <- cell_fact18 %>%
+  mutate(
+    treatment_mg_per_L = as.factor(treatment_mg_per_L),
+    simple_stage = factor(simple_stage, levels = c("A","B","C","TO")),
+    under_tissue = ifelse(is.na(under_tissue.), "NA", under_tissue.)
+  ) %>%
+  group_by(well_Placements, animal_ID, treatment_mg_per_L, simple_stage) %>%
+  summarise(
+    cell_count_per_well = sum(cell_count, na.rm = TRUE),
+    under_tissue = dplyr::coalesce(first(under_tissue[!is.na(under_tissue)]), "NA"),
+    n_images = sum(!is.na(cell_count)),
+    .groups = "drop"
+  )
+
+n_lab_genets <- well_counts %>%
+  count(treatment_mg_per_L, simple_stage, name = "n_genets")
+n_lab_well <- mono_well %>%
+  count(treatment_mg_per_L, simple_stage, animal_ID, name = "n_genets")
+```
+
+```{r}
+png(filename = "../output/cell_count_18hps_preni.png", width = 1300, height = 850)
+ggplot(well_counts,
+       aes(x = simple_stage,
+           y = cell_count_per_well,
+           color = under_tissue)) +
+
+  geom_point(
+    position = position_jitter(width = 0.08, height = 0),
+    size = 9,
+    alpha = 0.95
+  ) +
+
+  facet_wrap(~ treatment_mg_per_L, nrow = 1) +
+
+scale_color_manual(
+  values = c(
+    "yes" = "#009E73",
+    "no"  = "#CC79A7",
+    "NA"  = "grey"
+  ),
+  labels = c(
+    "yes" = "Emerging from\nunderneath tissue explant",
+    "no"  = "Whole monolayer",
+    "NA"  = "No monolayer"
+  ),
+  name = "Monolayer occurance and\narea included in cell count"
+)+
+  labs(
+    x = "Blastogenic Stage",
+    y = "Cell count per well",
+  ) +
+
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.05))) +
+
+  geom_text(
+    data = n_lab_genets,
+    aes(x = simple_stage, y = -10, label = paste0("n = ", n_genets)),
+    inherit.aes = FALSE,
+    size = 7
+  ) +
+
+  coord_cartesian(clip = "off") +
+
+  theme_classic(base_size = 18) +
+  theme(
+    strip.text = element_text(size = 22, face = "bold"),
+    axis.title = element_text(size = 22),
+    axis.text = element_text(size = 20),
+    legend.title = element_text(size = 22),
+    legend.text = element_text(size = 20),
+    legend.position = "right",
+    panel.background = element_rect(fill = "white", color = "black"),
+    legend.key = element_rect(fill = "white", color = NA)
+  )
+
+dev.off()
+```
+
+```{r}
+tissue_well <- cell_fact18 %>%
+  distinct(well_Placements, animal_ID, treatment_mg_per_L, simple_stage, tissue_total)
+tissue_summary <- tissue_well %>%
+  group_by(treatment_mg_per_L, simple_stage) %>%
+  summarise(
+    n_wells = n(),
+    mean_tissue = mean(tissue_total, na.rm = TRUE),
+    sd_tissue = sd(tissue_total, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+tissue_summary
+
+overall_tissue <- tissue_well %>%
+  summarise(
+    n_wells = n(),
+    mean_tissue = mean(tissue_total, na.rm = TRUE),
+    sd_tissue = sd(tissue_total, na.rm = TRUE)
+  )
+
+overall_tissue
+
+```
 
 
